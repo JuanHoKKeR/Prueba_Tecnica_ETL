@@ -3,5 +3,4 @@ venv
 __pycache__
 DAILoc.geojson
 delitos_alto_impacto.zip
-.github/GITHUB_ACTIONS_SETUP.md
 deploy/setup-github-sa.sh
