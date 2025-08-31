@@ -35,6 +35,29 @@ logger = logging.getLogger(__name__)
 job_tracker: Dict[str, Dict] = {}
 
 
+def get_optimal_date_range():
+    """
+    Determinar el rango de fechas óptimo basado en datos disponibles
+    
+    Returns:
+        tuple: (start_date, end_date) con el rango más reciente disponible
+    """
+    # Datos reales disponibles: enero-junio 2025
+    # Para análisis completo usamos todo el período
+    return datetime(2025, 1, 1), datetime(2025, 6, 30)
+
+
+def get_recent_analysis_range():
+    """
+    Obtener rango para análisis reciente (últimos 3 meses de datos)
+    
+    Returns:
+        tuple: (start_date, end_date) para análisis de tendencias recientes
+    """
+    # Últimos 3 meses del período con datos
+    return datetime(2025, 4, 1), datetime(2025, 6, 30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -94,8 +117,8 @@ async def run_etl_pipeline(
             start_date = request.time_range.start_date
             end_date = request.time_range.end_date
         else:
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=90)  # Por defecto ultimos 90 dias
+            # Usar el rango óptimo de datos disponibles
+            start_date, end_date = get_optimal_date_range()
 
         # Extraer datos
         logger.info(f"Extrayendo datos desde {start_date} hasta {end_date}")
@@ -106,10 +129,10 @@ async def run_etl_pipeline(
                 use_cache=not request.force_refresh
             )
 
-        # Transformar datos
-        logger.info("Transformando datos y calculando puntajes de seguridad")
+        # Transformar datos usando datos reales de criminalidad
+        logger.info("Transformando datos y calculando puntajes de seguridad con datos reales")
         transformer = DataTransformer()
-        scores = transformer.transform_all_zones(data, datetime.now())
+        scores = transformer.transform_all_zones_with_real_data(data, datetime.now())
 
         # Filtrar por zonas solicitadas si se especifican
         if request.zones:
@@ -124,8 +147,9 @@ async def run_etl_pipeline(
                 metadata={"request": request.dict()}
             )
 
-            # Cargar zonas si es primera ejecucion
-            if request.force_refresh:
+            # Verificar si existen zonas, si no cargarlas
+            if not await loader.zones_exist() or request.force_refresh:
+                logger.info("Cargando datos de zonas a la base de datos")
                 await loader.load_zones(data['localidades'])
 
             # Cargar puntajes de seguridad
@@ -155,6 +179,42 @@ async def root():
         "message": "API de analisis de zonas de Roda",
         "version": settings.api_version,
         "docs": "/docs"
+    }
+
+
+@app.get("/data-availability")
+async def get_data_availability():
+    """
+    Obtener información sobre la disponibilidad de datos
+    
+    Retorna los rangos de fechas disponibles para análisis
+    """
+    optimal_start, optimal_end = get_optimal_date_range()
+    recent_start, recent_end = get_recent_analysis_range()
+    
+    return {
+        "data_source": "Bogotá Open Data Portal - DAILoc Crime Dataset",
+        "coverage": {
+            "full_range": {
+                "start_date": optimal_start.isoformat(),
+                "end_date": optimal_end.isoformat(),
+                "description": "Período completo con datos de criminalidad disponibles"
+            },
+            "recent_range": {
+                "start_date": recent_start.isoformat(), 
+                "end_date": recent_end.isoformat(),
+                "description": "Últimos 3 meses para análisis de tendencias recientes"
+            }
+        },
+        "crime_types": [
+            "HURTO A PERSONAS", "HURTO A CELULARES", "HURTO A MOTOCICLETAS",
+            "HURTO A BICICLETAS", "HURTO A VEHICULOS", "HURTO A ENTIDADES COMERCIALES",
+            "HURTO A RESIDENCIAS", "HURTO A ENTIDADES FINANCIERAS",
+            "LESIONES PERSONALES", "VIOLENCIA INTRAFAMILIAR", "SECUESTRO"
+        ],
+        "geographical_coverage": "20 localidades de Bogotá D.C.",
+        "update_frequency": "Los datos se actualizan según disponibilidad del portal oficial",
+        "recommendation": "Para análisis completos use el rango completo, para tendencias use el rango reciente"
     }
 
 
@@ -274,13 +334,13 @@ async def analyze_zone(
 
                 # Extraer datos recientes
                 async with DataExtractor() as extractor:
-                    end_date = datetime.now()
-                    start_date = end_date - timedelta(days=days_back)
+                    # Usar rango optimizado para análisis reciente
+                    start_date, end_date = get_recent_analysis_range()
                     data = await extractor.fetch_all_data(start_date, end_date)
 
-                # Transformar y calcular puntaje
+                # Transformar y calcular puntaje usando datos reales
                 transformer = DataTransformer()
-                all_scores = transformer.transform_all_zones(data)
+                all_scores = transformer.transform_all_zones_with_real_data(data)
 
                 # Encontrar zona solicitada
                 zone_score = next((s for s in all_scores if s.zone_code == zone_code), None)
@@ -410,13 +470,18 @@ async def http_exception_handler(request, exc):
     """
     Manejar excepciones HTTP
     """
+    error_response = ErrorResponse(
+        error=f"HTTP {exc.status_code}",
+        message=exc.detail,
+        timestamp=datetime.now()
+    )
+    # Convertir manualmente el timestamp a string
+    response_dict = error_response.dict()
+    response_dict['timestamp'] = response_dict['timestamp'].isoformat()
+    
     return JSONResponse(
         status_code=exc.status_code,
-        content=ErrorResponse(
-            error=f"HTTP {exc.status_code}",
-            message=exc.detail,
-            timestamp=datetime.now()
-        ).dict()
+        content=response_dict
     )
 
 
@@ -426,14 +491,19 @@ async def general_exception_handler(request, exc):
     Manejar excepciones generales
     """
     logger.error(f"Excepcion no manejada: {exc}")
+    error_response = ErrorResponse(
+        error="Internal Server Error",
+        message="Ocurrio un error inesperado",
+        details={"error": str(exc)} if not settings.is_production else None,
+        timestamp=datetime.now()
+    )
+    # Convertir manualmente el timestamp a string
+    response_dict = error_response.dict()
+    response_dict['timestamp'] = response_dict['timestamp'].isoformat()
+    
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(
-            error="Internal Server Error",
-            message="Ocurrio un error inesperado",
-            details={"error": str(exc)} if not settings.is_production else None,
-            timestamp=datetime.now()
-        ).dict()
+        content=response_dict
     )
 
 

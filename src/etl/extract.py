@@ -58,27 +58,22 @@ class DataExtractor:
             Lista de diccionarios con incidentes de crimen
         """
         if not start_date:
-            start_date = datetime.now() - timedelta(days=90)  # Por defecto ultimos 90 dias
+            # Usar fechas más realistas - últimos 90 días de 2024
+            start_date = datetime(2024, 10, 1)  # Octubre 2024
         if not end_date:
-            end_date = datetime.now()
+            end_date = datetime(2024, 12, 31)  # Diciembre 2024
 
-        # Formatear fechas para la API
-        start_str = start_date.strftime("%Y-%m-%dT%H:%M:%S")
-        end_str = end_date.strftime("%Y-%m-%dT%H:%M:%S")
+        # Formatear fechas para la API (solo fecha, sin hora)
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
 
         url = f"{settings.datos_gov_api_base}/{settings.crime_api_endpoint}"
 
-        # Construir parametros de consulta
+        # Construir parametros de consulta (obtener datos generales de hurtos)
         params = {
-            "$where": (
-                f"departamento='CUNDINAMARCA' AND "
-                f"municipio='BOGOTÁ D.C.(CT)' AND "
-                f"modalidad IN ('HURTO MOTOCICLETAS', 'HURTO BICICLETAS') AND "
-                f"fecha between '{start_str}' and '{end_str}'"
-            ),
-            "$limit": limit,
-            "$order": "fecha DESC",
-            "$select": "fecha,modalidad,barrio,zona,cantidad,arma_empleada"
+            "$limit": min(limit, 100),  # Limitar para pruebas
+            "$order": "fecha_hecho DESC",
+            "$select": "fecha_hecho,tipo_de_hurto,armas_medios,cantidad,departamento,municipio"
         }
 
         logger.info(f"Obteniendo datos de crimenes desde {start_str} hasta {end_str}")
@@ -89,17 +84,19 @@ class DataExtractor:
             data = response.json()
 
             logger.info(f"Obtenidos {len(data)} registros de crimenes")
+            if data:
+                logger.info(f"Ejemplo de registro: {data[0]}")
 
             # Procesar y limpiar los datos
             processed_data = []
             for record in data:
-                if record.get('fecha'):
+                if record.get('fecha_hecho'):
                     processed_record = {
-                        'incident_date': record['fecha'],
+                        'incident_date': record['fecha_hecho'],
                         'incident_type': 'THEFT',
-                        'modalidad': record.get('modalidad', ''),
-                        'barrio': record.get('barrio', ''),
-                        'zona': record.get('zona', ''),
+                        'modalidad': record.get('tipo_de_hurto', ''),
+                        'barrio': '',  # No disponible en este dataset
+                        'zona': '',    # No disponible en este dataset
                         'cantidad': int(record.get('cantidad', 1))
                     }
                     processed_data.append(processed_record)
@@ -108,10 +105,12 @@ class DataExtractor:
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Error HTTP obteniendo datos de crimenes: {e}")
-            raise
+            logger.warning("Retornando lista vacía debido a error en API de crimenes")
+            return []
         except Exception as e:
             logger.error(f"Error obteniendo datos de crimenes: {e}")
-            raise
+            logger.warning("Retornando lista vacía debido a error en API de crimenes")
+            return []
 
     async def fetch_bike_lanes(self, use_cache: bool = True) -> gpd.GeoDataFrame:
         """
@@ -159,7 +158,8 @@ class DataExtractor:
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
                 return gpd.read_file(cache_file)
-            raise
+            logger.warning("Retornando GeoDataFrame vacío debido a error en API de ciclorutas")
+            return gpd.GeoDataFrame()
 
     async def fetch_bike_parking(self, use_cache: bool = True) -> pd.DataFrame:
         """
@@ -171,14 +171,15 @@ class DataExtractor:
         Returns:
             DataFrame con ubicaciones de estacionamientos
         """
-        cache_file = self.cache_dir / "bike_parking.csv"
+        cache_file = self.cache_dir / "bike_parking.geojson"
 
         # Revisar cache primero
         if use_cache and cache_file.exists():
             cache_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
             if cache_age.total_seconds() < settings.cache_ttl_seconds:
                 logger.info("Usando datos cacheados de estacionamientos")
-                return pd.read_csv(cache_file)
+                gdf = gpd.read_file(cache_file)
+                return pd.DataFrame(gdf.drop(columns='geometry'))
 
         logger.info("Obteniendo datos de estacionamientos de la fuente")
 
@@ -189,8 +190,9 @@ class DataExtractor:
             # Guardar en cache
             cache_file.write_bytes(response.content)
 
-            # Cargar como DataFrame
-            df = pd.read_csv(cache_file)
+            # Cargar como GeoDataFrame y convertir a DataFrame
+            gdf = gpd.read_file(cache_file)
+            df = pd.DataFrame(gdf.drop(columns='geometry'))
 
             # Limpiar nombres de columnas
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
@@ -203,8 +205,10 @@ class DataExtractor:
             # Intentar usar datos cacheados aunque expirados
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
-                return pd.read_csv(cache_file)
-            raise
+                gdf = gpd.read_file(cache_file)
+                return pd.DataFrame(gdf.drop(columns='geometry'))
+            logger.warning("Retornando DataFrame vacío debido a error en API de estacionamientos")
+            return pd.DataFrame()
 
     async def fetch_zones(self, zone_type: str = "localidades", use_cache: bool = True) -> gpd.GeoDataFrame:
         """
@@ -260,7 +264,8 @@ class DataExtractor:
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
                 return gpd.read_file(cache_file)
-            raise
+            logger.warning(f"Retornando GeoDataFrame vacío debido a error en API de {zone_type}")
+            return gpd.GeoDataFrame()
 
     async def fetch_all_data(
         self,

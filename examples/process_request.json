@@ -1,0 +1,17 @@
+{
+  "mode": "BATCH",
+  "time_range": {
+    "start_date": "2025-01-01T00:00:00",
+    "end_date": "2025-06-30T23:59:59"
+  },
+  "zones": [
+    "CHAPINERO",
+    "USAQUEN",
+    "SUBA", 
+    "KENNEDY",
+    "TEUSAQUILLO",
+    "SANTAFE",
+    "LA CANDELARIA"
+  ],
+  "force_refresh": false
+}

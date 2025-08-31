@@ -58,6 +58,22 @@ class DataLoader:
             logger.error(f"Fallo en la conexion a la base: {e}")
             return False
 
+    async def zones_exist(self) -> bool:
+        """
+        Verificar si existen zonas en la base de datos
+
+        Returns:
+            True si existen zonas, False si no
+        """
+        try:
+            async with self.async_session() as session:
+                result = await session.execute(text("SELECT COUNT(*) FROM zones"))
+                count = result.scalar()
+                return count > 0
+        except Exception as e:
+            logger.error(f"Error verificando zonas: {e}")
+            return False
+
     async def load_zone_safety_scores(
         self,
         scores: List[ZoneSafetyScore],
@@ -202,9 +218,9 @@ class DataLoader:
                     """)
 
                     params = {
-                        'zone_code': zone.get('Nombre', f'Zone_{idx}'),
+                        'zone_code': zone.get('LocNombre', f'Zone_{idx}'),
                         'zone_type': 'LOCALIDAD',
-                        'name': zone.get('Nombre', f'Zone_{idx}'),
+                        'name': zone.get('LocNombre', f'Zone_{idx}'),
                         'area': zone.get('area_km2', 0),
                         'geometry': geom_wkt
                     }

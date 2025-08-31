@@ -1,3 +1,5 @@
 .env
 venv
 __pycache__
+DAILoc.geojson
+delitos_alto_impacto.zip

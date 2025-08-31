@@ -5,7 +5,7 @@ Modelos Pydantic para validacion de requests/responses
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 from decimal import Decimal
 
 
@@ -215,7 +215,8 @@ class ErrorResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None  # Detalles adicionales
     timestamp: datetime = Field(default_factory=datetime.now)  # Timestamp del error
 
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )

@@ -66,24 +66,24 @@ class Settings(BaseSettings):
     crime_api_endpoint: str = "9vha-vh9n.json"  # Endpoint para datos de crimenes
     bike_lanes_geojson_url: str = (
         "https://datosabiertos.bogota.gov.co/dataset/"
-        "bf351d91-a925-455e-a51f-c1154a066c23/resource/"
-        "69094859-b7a9-42e8-b201-e10ae70a6ae3/download/cicloruta.geojson"
-    )  # URL para datos de ciclorutas en GeoJSON
+        "fe3b2925-3e76-4928-9a01-91cbd2e02f3b/resource/"
+        "9b8ddc28-7f06-43a8-a2d2-6360a1a154ea/download/ciclorruta.geojson"
+    )  # URL para datos de ciclorutas en GeoJSON (actualizado 2025-04-26)
     parking_csv_url: str = (
         "https://datosabiertos.bogota.gov.co/dataset/"
-        "2f9d99a03ddf441c94ceb0e2e6f76cac_0/resource/"
-        "2f9d99a03ddf441c94ceb0e2e6f76cac/download/biciparqueaderos.csv"
-    )  # URL para datos de estacionamientos en CSV
+        "8471c407-1f36-4dbb-b627-9db9a80628c6/resource/"
+        "78852fb0-883e-490c-a8d8-b649c4ef84ad/download/cicloparqueadero.geojson"
+    )  # URL para datos de estacionamientos en GeoJSON (actualizado 2025-06-18)
     localidades_geojson_url: str = (
         "https://datosabiertos.bogota.gov.co/dataset/"
-        "6d2d5e91-75c5-44d2-b5ec-7a326a0a5a6d/resource/"
-        "e7919b21-0ce7-4efc-9e21-db7a8e49d9f4/download/localidad.geojson"
-    )  # URL para datos de localidades en GeoJSON
+        "856cb657-8ca3-4ee8-857f-37211173b1f8/resource/"
+        "497b8756-0927-4aee-8da9-ca4e32ca3a8a/download/loca.json"
+    )  # URL para datos de localidades en JSON (actualizado 2023-02-28)
     upz_geojson_url: str = (
         "https://datosabiertos.bogota.gov.co/dataset/"
-        "c24beed0-458c-487e-85ac-d606343d1a51/resource/"
-        "f1c47c03-e158-4872-99f3-af43a1361354/download/upz.geojson"
-    )  # URL para datos de UPZ en GeoJSON
+        "14a3f701-35a9-4d96-a2b5-0f38c44190ed/resource/"
+        "e1893236-0de4-41bf-9757-4441c137e42f/download/macroterritorio.json"
+    )  # URL para datos de UPZ/macroterritorio en JSON (actualizado 2025-08-22)
 
     @validator("data_cache_dir", pre=True)
     def create_cache_dir(cls, v):
