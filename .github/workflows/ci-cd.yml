@@ -12,6 +12,8 @@ env:
   REGION: us-central1
   REGISTRY_HOSTNAME: us-central1-docker.pkg.dev
   REPOSITORY: roda-repo
+  # 🌐 URL configurable - cambiar solo aquí para todo el pipeline
+  SERVICE_DOMAIN: roda-analytics-jebcgzfxdq-uc.a.run.app
 
 jobs:
   # ====================================
@@ -51,6 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     if: github.ref == 'refs/heads/main'
+    environment: production
     
     permissions:
       contents: read
@@ -149,13 +152,13 @@ jobs:
           sleep 30
           
           echo "🔍 Testing health endpoint..."
-          curl -f "${{ steps.service_url.outputs.url }}/health" || exit 1
+          curl -f "https://${{ env.SERVICE_DOMAIN }}/health" || exit 1
           
           echo "📊 Testing data availability..."
-          curl -f "${{ steps.service_url.outputs.url }}/data-availability" || exit 1
+          curl -f "https://${{ env.SERVICE_DOMAIN }}/data-availability" || exit 1
           
           echo "🎯 Testing zone analysis..."
-          curl -f "${{ steps.service_url.outputs.url }}/analyze/KENNEDY" || exit 1
+          curl -f "https://${{ env.SERVICE_DOMAIN }}/analyze/KENNEDY" || exit 1
 
       - name: 📋 Deployment summary
         run: |
@@ -168,8 +171,8 @@ jobs:
           echo "| **Region** | 📍 | ${{ env.REGION }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🧪 Quick Tests:" >> $GITHUB_STEP_SUMMARY
-          echo "- Health: \`curl ${{ steps.service_url.outputs.url }}/health\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Analysis: \`curl ${{ steps.service_url.outputs.url }}/analyze/KENNEDY\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: \`curl https://${{ env.SERVICE_DOMAIN }}/health\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Analysis: \`curl https://${{ env.SERVICE_DOMAIN }}/analyze/KENNEDY\`" >> $GITHUB_STEP_SUMMARY
 
   # ====================================
   # 🔄 POST-DEPLOYMENT
@@ -179,6 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-deploy
     if: github.ref == 'refs/heads/main'
+    environment: production
     
     steps:
       - name: 🔐 Authenticate to Google Cloud
@@ -198,7 +202,7 @@ jobs:
           echo "🔄 Triggering ETL pipeline update..."
           curl -X POST -H "Content-Type: application/json" \
             -d '{"mode": "BATCH", "zones": [], "force_refresh": true}' \
-            "$SERVICE_URL/process" || echo "ETL trigger completed with warnings"
+            "https://${{ env.SERVICE_DOMAIN }}/process" || echo "ETL trigger completed with warnings"
 
       - name: 📊 Update BigQuery data
         run: |
@@ -211,4 +215,4 @@ jobs:
         if: always()
         run: |
           echo "🎉 Deployment completed successfully!"
-          echo "Service URL: https://roda-analytics-jebcgzfxdq-uc.a.run.app"
+          echo "Service URL: https://${{ env.SERVICE_DOMAIN }}"
