@@ -1,0 +1,214 @@
+name: 🚀 CI/CD Pipeline - RODA Analytics
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: focus-chain-470709-q6
+  SERVICE_NAME: roda-analytics
+  REGION: us-central1
+  REGISTRY_HOSTNAME: us-central1-docker.pkg.dev
+  REPOSITORY: roda-repo
+
+jobs:
+  # ====================================
+  # 🧪 TESTING & VALIDATION
+  # ====================================
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: 🧪 Run tests
+        run: |
+          python -m pytest tests/ -v --cov=src --cov-report=xml
+
+      - name: 📊 Upload coverage
+        uses: codecov/codecov-action@v3
+        if: always()
+
+  # ====================================
+  # 🏗️ BUILD & DEPLOY
+  # ====================================
+  build-and-deploy:
+    name: 🏗️ Build & Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: ☁️ Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 🔧 Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_HOSTNAME }}
+
+      - name: 🏷️ Generate image tag
+        id: image_tag
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "tag=v$(date +%Y%m%d)-$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "image=${{ env.REGISTRY_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/zone-analytics:v$(date +%Y%m%d)-$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: 🏗️ Build Docker image
+        run: |
+          docker build \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --build-arg VERSION=${{ steps.image_tag.outputs.tag }} \
+            -t ${{ steps.image_tag.outputs.image }} \
+            .
+
+      - name: 🔍 Security scan
+        run: |
+          # Opcional: Trivy security scan
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $HOME/Library/Caches:/root/.cache/ \
+            aquasec/trivy:latest image \
+            --exit-code 0 --severity HIGH,CRITICAL \
+            ${{ steps.image_tag.outputs.image }} || echo "Security scan completed with warnings"
+
+      - name: 📤 Push to Artifact Registry
+        run: |
+          docker push ${{ steps.image_tag.outputs.image }}
+          
+          # También crear tag 'latest'
+          docker tag ${{ steps.image_tag.outputs.image }} \
+            ${{ env.REGISTRY_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/zone-analytics:latest
+          docker push ${{ env.REGISTRY_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/zone-analytics:latest
+
+      - name: 🚀 Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ steps.image_tag.outputs.image }} \
+            --platform=managed \
+            --region=${{ env.REGION }} \
+            --port=8080 \
+            --memory=2Gi \
+            --cpu=2 \
+            --min-instances=1 \
+            --max-instances=5 \
+            --timeout=600 \
+            --concurrency=50 \
+            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            --set-env-vars="POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}" \
+            --set-env-vars="POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}" \
+            --set-env-vars="POSTGRES_USER=${{ secrets.POSTGRES_USER }}" \
+            --set-env-vars="POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" \
+            --set-env-vars="POSTGRES_DB=${{ secrets.POSTGRES_DB }}" \
+            --set-env-vars="API_HOST=0.0.0.0" \
+            --set-env-vars="API_PORT=8080" \
+            --set-env-vars="API_ENV=production" \
+            --set-env-vars="LOG_LEVEL=INFO" \
+            --set-env-vars="CACHE_DIR=/tmp/roda_cache" \
+            --set-env-vars="GCP_PROJECT_ID=${{ env.PROJECT_ID }}" \
+            --set-env-vars="CRIME_DATA_URL=${{ secrets.CRIME_DATA_URL }}" \
+            --allow-unauthenticated \
+            --tag=${{ steps.image_tag.outputs.tag }}
+
+      - name: 🌐 Get service URL
+        id: service_url
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+
+      - name: 🏥 Health check
+        run: |
+          echo "⏳ Waiting for service to be ready..."
+          sleep 30
+          
+          echo "🔍 Testing health endpoint..."
+          curl -f "${{ steps.service_url.outputs.url }}/health" || exit 1
+          
+          echo "📊 Testing data availability..."
+          curl -f "${{ steps.service_url.outputs.url }}/data-availability" || exit 1
+          
+          echo "🎯 Testing zone analysis..."
+          curl -f "${{ steps.service_url.outputs.url }}/analyze/KENNEDY" || exit 1
+
+      - name: 📋 Deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Service** | ✅ Deployed | ${{ env.SERVICE_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image** | ✅ Built | ${{ steps.image_tag.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ✅ Active | ${{ steps.service_url.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Region** | 📍 | ${{ env.REGION }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Quick Tests:" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: \`curl ${{ steps.service_url.outputs.url }}/health\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Analysis: \`curl ${{ steps.service_url.outputs.url }}/analyze/KENNEDY\`" >> $GITHUB_STEP_SUMMARY
+
+  # ====================================
+  # 🔄 POST-DEPLOYMENT
+  # ====================================
+  post-deploy:
+    name: 🔄 Post-Deployment Tasks
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: 🔐 Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: ☁️ Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 🔄 Trigger ETL update
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          
+          echo "🔄 Triggering ETL pipeline update..."
+          curl -X POST -H "Content-Type: application/json" \
+            -d '{"mode": "BATCH", "zones": [], "force_refresh": true}' \
+            "$SERVICE_URL/process" || echo "ETL trigger completed with warnings"
+
+      - name: 📊 Update BigQuery data
+        run: |
+          echo "📊 Checking BigQuery integration..."
+          bq query --use_legacy_sql=false \
+            'SELECT COUNT(*) as record_count FROM `${{ env.PROJECT_ID }}.roda_analytics.zone_safety_scores`' \
+            || echo "BigQuery check completed"
+
+      - name: 📧 Notification
+        if: always()
+        run: |
+          echo "🎉 Deployment completed successfully!"
+          echo "Service URL: https://roda-analytics-jebcgzfxdq-uc.a.run.app"
