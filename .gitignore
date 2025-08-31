@@ -1,6 +1,63 @@
+# 🔐 Archivos con datos sensibles
 .env
+.env.*
+!.env.example
+*.key
+*.json
+!package*.json
+!tsconfig*.json
+
+# 🤖 Python
 venv
 __pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.pytest_cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# 📊 Datos locales
 DAILoc.geojson
+DAILoc.gpkg
 delitos_alto_impacto.zip
+*.zip
+*.csv
+data/
+
+# 🔧 Scripts configurados localmente
 deploy/setup-github-sa.sh
+deploy/*-local.*
+deploy/*-production.*
+github-actions-key*
+
+# 🖥️ Sistema
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 📝 IDEs
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 🚀 Deploy temporal
+*.tmp
+.deploy
+deploy-*.log

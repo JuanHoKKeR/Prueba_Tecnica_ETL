@@ -1,0 +1,33 @@
+# Variables de entorno para Cloud Run - TEMPLATE
+# Copiar este archivo y reemplazar con tus valores reales
+
+# Base de datos Cloud SQL
+DATABASE_URL=postgresql://YOUR_DB_USER:YOUR_DB_PASSWORD@YOUR_DB_HOST:5432/YOUR_DB_NAME
+POSTGRES_HOST=YOUR_CLOUD_SQL_IP
+POSTGRES_PORT=5432
+POSTGRES_USER=YOUR_DB_USER
+POSTGRES_PASSWORD=YOUR_DB_PASSWORD
+POSTGRES_DB=YOUR_DB_NAME
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8080
+API_ENV=production
+LOG_LEVEL=INFO
+
+# Cache y datos
+CACHE_DIR=/tmp/roda_cache
+CRIME_DATA_URL=YOUR_CRIME_DATA_SOURCE_URL
+
+# Google Cloud específico
+GCP_PROJECT_ID=YOUR_GCP_PROJECT_ID
+INSTANCE_CONNECTION_NAME=YOUR_PROJECT:YOUR_REGION:YOUR_INSTANCE_NAME
+
+# BigQuery (opcional - para analytics avanzados)
+ENABLE_BIGQUERY=true
+BIGQUERY_DATASET=roda_analytics
+BIGQUERY_TABLE=zone_safety_scores
+
+# Scheduler (opcional - para actualizaciones automáticas)
+ENABLE_SCHEDULER=true
+SCHEDULE_CRON=0 6 * * *  # Ejecutar diariamente a las 6 AM
