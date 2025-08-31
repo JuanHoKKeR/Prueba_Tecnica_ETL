@@ -13,11 +13,16 @@ RUN apt-get update && apt-get install -y \
     libgeos-dev \
     libproj-dev \
     postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Configuramos variables de entorno para GDAL
+# Configuramos variables de entorno para GDAL y producción
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PORT=8080
 
 # Copiamos primero el archivo de requisitos para aprovechar el cache de Docker
 COPY requirements.txt .
@@ -30,22 +35,22 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY src/ ./src/
 COPY sql/ ./sql/
 
-# Creamos un directorio para el cache
-RUN mkdir -p /tmp/roda_cache
+# Creamos directorios necesarios
+RUN mkdir -p /tmp/roda_cache /app/logs
 
-# Creamos un usuario no-root por seguridad
+# Creamos un usuario no-root por seguridad (Cloud Run requirement)
 RUN useradd -m -u 1000 roda && \
     chown -R roda:roda /app /tmp/roda_cache
 
 # Cambiamos al usuario no-root
 USER roda
 
-# Exponemos el puerto 8080 para la aplicacion
+# Exponemos el puerto 8080 para Cloud Run
 EXPOSE 8080
 
-# Configuramos un health check para verificar que la app este corriendo
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health')" || exit 1
+# Health check optimizado para Cloud Run (simple HTTP check)
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
-# Comando para ejecutar la aplicacion con uvicorn
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Comando optimizado para Cloud Run con manejo de señales
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--access-log"]

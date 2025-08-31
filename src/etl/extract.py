@@ -11,6 +11,9 @@ import logging
 from pathlib import Path
 import json
 import asyncio
+import zipfile
+import tempfile
+import os
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config.settings import settings
@@ -111,6 +114,73 @@ class DataExtractor:
             logger.error(f"Error obteniendo datos de crimenes: {e}")
             logger.warning("Retornando lista vacía debido a error en API de crimenes")
             return []
+
+    async def fetch_crime_data_geojson(self, use_cache: bool = True) -> bool:
+        """
+        Descargar y extraer datos de criminalidad real de Bogotá desde ZIP
+        
+        Returns:
+            bool: True si los datos se descargaron/extrajeron exitosamente
+        """
+        target_file = "DAILoc.geojson"
+        
+        # Si el archivo ya existe y no se fuerza refresh, usar cache
+        if os.path.exists(target_file) and use_cache:
+            logger.info(f"Usando archivo cacheado: {target_file}")
+            return True
+            
+        try:
+            logger.info("Descargando datos de criminalidad de Bogotá...")
+            url = "https://datosabiertos.bogota.gov.co/dataset/7b270013-42ca-436b-9c1e-3bcb7d280c6b/resource/b24e6cfa-ae5d-465c-8fe7-e494cd377897/download/dai_gpkg.zip"
+            
+            # Descargar archivo ZIP
+            response = await self.http_client.get(url)
+            response.raise_for_status()
+            
+            # Crear archivo temporal para el ZIP
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_zip:
+                tmp_zip.write(response.content)
+                tmp_zip_path = tmp_zip.name
+            
+            # Extraer el archivo GPKG o GeoJSON del ZIP
+            with zipfile.ZipFile(tmp_zip_path, 'r') as zip_ref:
+                # Buscar archivo .gpkg o .geojson en el ZIP
+                target_files = [f for f in zip_ref.namelist() if f.endswith(('.geojson', '.gpkg'))]
+                if not target_files:
+                    logger.error("No se encontró archivo .geojson ni .gpkg en el ZIP")
+                    return False
+                
+                # Extraer el primer archivo encontrado
+                source_file = target_files[0]
+                zip_ref.extract(source_file, ".")
+                
+                # Si es GPKG, convertir a GeoJSON
+                if source_file.endswith('.gpkg'):
+                    logger.info(f"Convirtiendo {source_file} a GeoJSON...")
+                    try:
+                        # Leer GPKG y convertir a GeoJSON
+                        gdf = gpd.read_file(source_file)
+                        gdf.to_file(target_file, driver='GeoJSON')
+                        # Limpiar archivo GPKG temporal
+                        os.unlink(source_file)
+                        logger.info(f"Conversión exitosa: {source_file} -> {target_file}")
+                    except Exception as e:
+                        logger.error(f"Error convirtiendo GPKG a GeoJSON: {e}")
+                        return False
+                else:
+                    # Renombrar GeoJSON si es necesario
+                    if source_file != target_file:
+                        os.rename(source_file, target_file)
+            
+            # Limpiar archivo temporal
+            os.unlink(tmp_zip_path)
+            
+            logger.info(f"Datos de criminalidad descargados exitosamente: {target_file}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error descargando datos de criminalidad: {e}")
+            return False
 
     async def fetch_bike_lanes(self, use_cache: bool = True) -> gpd.GeoDataFrame:
         """
@@ -285,6 +355,9 @@ class DataExtractor:
             Diccionario con todos los datos obtenidos
         """
         logger.info("Iniciando obtencion paralela de datos de todas las fuentes")
+
+        # Primero descargar datos de criminalidad real (archivo grande)
+        await self.fetch_crime_data_geojson(use_cache)
 
         # Ejecutar todas las obtenciones en paralelo
         tasks = [

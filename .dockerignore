@@ -1,0 +1,65 @@
+# Archivos de Git
+.git
+.gitignore
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+htmlcov/
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Cache local
+/tmp/
+*.cache
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Documentación y ejemplos (no necesarios en runtime)
+README.md
+docs/
+examples/
+
+# Scripts de deploy (no necesarios en runtime)
+deploy/
+
+# Archivos de configuración local
+.env
+.env.local
+
+# Datos de prueba
+tests/
+*.test
+
+# Archives temporales
+*.tmp
+*.bak
+
+# Node modules (si hubiera)
+node_modules/
+
+# Docker
+Dockerfile
+docker-compose.yml
