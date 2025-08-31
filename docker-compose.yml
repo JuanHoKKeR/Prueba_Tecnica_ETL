@@ -1,0 +1,49 @@
+# Docker compose para el despliegue de la base de datos en postgres y el pgadmin
+version: '3.8'
+
+services:
+  # Postgres con PostGIS para manejar datos geoespaciales como mapas y coordenadas
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: roda_postgres
+    environment:
+      POSTGRES_USER: roda_user
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: roda_analytics
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - roda_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roda_user -d roda_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgAdmin para administrar la base de datos desde el navegador, facil para ver tablas y hacer consultas
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: roda_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@roda.xyz
+      PGADMIN_DEFAULT_PASSWORD: 123456
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - roda_network
+
+# Volumen para guardar los datos de postgres, asi no se pierden al reiniciar
+volumes:
+  postgres_data:
+    driver: local
+
+# Red para que los contenedores se comuniquen sin exponer puertos innecesarios
+networks:
+  roda_network:
+    driver: bridge
