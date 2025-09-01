@@ -165,37 +165,6 @@ jobs:
       - name: ☁️ Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: 🔄 Trigger ETL update
-        run: |
-          echo "🔍 Verifying database exists before ETL..."
-          
-          # Verificar que la base de datos existe
-          DB_EXISTS=$(gcloud sql databases list \
-            --instance=roda-analytics-db \
-            --project=${{ env.PROJECT_ID }} \
-            --filter="name=roda_analytics" \
-            --format="value(name)")
-          
-          if [ -z "$DB_EXISTS" ]; then
-            echo "❌ CRITICAL: Database 'roda_analytics' is missing after deployment!"
-            echo "🔄 Recreating database..."
-            gcloud sql databases create roda_analytics \
-              --instance=roda-analytics-db \
-              --project=${{ env.PROJECT_ID }}
-            echo "⚠️ Database recreated, but tables need to be initialized"
-          else
-            echo "✅ Database exists, proceeding with ETL..."
-          fi
-          
-          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --region=${{ env.REGION }} \
-            --format="value(status.url)")
-          
-          echo "🔄 Triggering ETL pipeline update..."
-          curl -X POST -H "Content-Type: application/json" \
-            -d '{"mode": "BATCH", "zones": [], "force_refresh": true}' \
-            "https://${{ env.SERVICE_DOMAIN }}/process" || echo "ETL trigger completed with warnings"
-
       - name: 📊 Update BigQuery data
         run: |
           echo "📊 Checking BigQuery integration..."
