@@ -28,18 +28,29 @@ def load_real_crime_data() -> gpd.GeoDataFrame:
     Returns:
         GeoDataFrame con datos de criminalidad por localidad
     """
-    crime_file_path = "DAILoc.geojson"
+    # Buscar el archivo en el directorio actual y en cache
+    possible_paths = [
+        "DAILoc.geojson",  # Directorio actual
+        os.path.join(os.getcwd(), "DAILoc.geojson"),  # Directorio de trabajo
+        os.path.join("/tmp/roda_cache", "DAILoc.geojson"),  # Cache
+    ]
     
-    if not os.path.exists(crime_file_path):
-        logger.error(f"Archivo de datos de criminalidad no encontrado: {crime_file_path}")
-        raise FileNotFoundError(f"Archivo de criminalidad no encontrado: {crime_file_path}")
+    crime_file_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            crime_file_path = path
+            break
+    
+    if not crime_file_path:
+        logger.error(f"Archivo de datos de criminalidad no encontrado en: {possible_paths}")
+        raise FileNotFoundError(f"Archivo de criminalidad no encontrado en ninguna de las rutas: {possible_paths}")
     
     try:
         crime_gdf = gpd.read_file(crime_file_path)
-        logger.info(f"Cargados datos de criminalidad: {len(crime_gdf)} localidades")
+        logger.info(f"Cargados datos de criminalidad desde {crime_file_path}: {len(crime_gdf)} localidades")
         return crime_gdf
     except Exception as e:
-        logger.error(f"Error cargando datos de criminalidad: {e}")
+        logger.error(f"Error cargando datos de criminalidad desde {crime_file_path}: {e}")
         raise
 
 
