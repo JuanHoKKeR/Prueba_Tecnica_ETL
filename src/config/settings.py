@@ -30,21 +30,16 @@ class Settings(BaseSettings):
     postgres_host: str = Field(default="localhost", env="POSTGRES_HOST")  # Host de Postgres
     postgres_port: int = Field(default=5432, env="POSTGRES_PORT")  # Puerto de Postgres
 
-    # Configuracion de BigQuery (opcional)
+    # Configuracion de BigQuery y GCP
     enable_bigquery: bool = Field(default=False, env="ENABLE_BIGQUERY")  # Habilitar BigQuery
-    gcp_project_id: str = Field(default="", env="GCP_PROJECT_ID")  # ID del proyecto GCP
-    bigquery_dataset: str = Field(default="roda_analytics", env="BIGQUERY_DATASET")  # Dataset de BigQuery
+    gcp_project_id: Optional[str] = Field(default=None, env="GCP_PROJECT_ID")  # ID del proyecto en GCP
+    gcp_region: str = Field(default="us-central1", env="GCP_REGION")  # Region de GCP
+    bigquery_dataset: str = Field(default="roda_analytics", env="BIGQUERY_DATASET")  # Dataset en BigQuery
     bigquery_table: str = Field(default="zone_safety_scores", env="BIGQUERY_TABLE")  # Tabla de BigQuery
 
     # Configuracion de Scheduler (opcional)
     enable_scheduler: bool = Field(default=False, env="ENABLE_SCHEDULER")  # Habilitar actualizaciones automáticas
     schedule_cron: str = Field(default="0 6 * * *", env="SCHEDULE_CRON")  # Expresión cron para scheduler
-    postgres_port: int = Field(default=5432, env="POSTGRES_PORT")  # Puerto de Postgres
-
-    # Configuracion de GCP (Google Cloud Platform)
-    gcp_project_id: Optional[str] = Field(default=None, env="GCP_PROJECT_ID")  # ID del proyecto en GCP
-    gcp_region: str = Field(default="us-central1", env="GCP_REGION")  # Region de GCP
-    bigquery_dataset: Optional[str] = Field(default="roda_analytics", env="BIGQUERY_DATASET")  # Dataset en BigQuery
 
     # APIs externas
     datos_gov_api_base: str = Field(
