@@ -14,12 +14,86 @@ import asyncio
 import zipfile
 import tempfile
 import os
+import socket
+import sys
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config.settings import settings
 from ..models.schemas import CrimeIncident, TimeRange
 
 logger = logging.getLogger(__name__)
+
+
+def log_network_error(error: Exception, url: str, operation: str, client_info: dict = None):
+    """
+    Función para logging detallado de errores de red
+    """
+    error_details = {
+        "operation": operation,
+        "url": url,
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "python_version": sys.version,
+        "environment": os.getenv("ENVIRONMENT", "unknown")
+    }
+    
+    # Información del cliente HTTP si está disponible
+    if client_info:
+        error_details.update(client_info)
+    
+    # Detalles específicos según el tipo de error
+    if isinstance(error, httpx.HTTPStatusError):
+        error_details.update({
+            "status_code": error.response.status_code,
+            "response_headers": dict(error.response.headers),
+            "response_text": error.response.text[:500] if hasattr(error.response, 'text') else None,
+            "request_url": str(error.request.url),
+            "request_method": error.request.method,
+            "request_headers": dict(error.request.headers)
+        })
+    elif isinstance(error, httpx.TimeoutException):
+        error_details.update({
+            "timeout_type": "HTTP timeout",
+            "timeout_details": str(error)
+        })
+    elif isinstance(error, httpx.ConnectTimeout):
+        error_details.update({
+            "timeout_type": "Connection timeout",
+            "connection_details": str(error)
+        })
+    elif isinstance(error, httpx.ReadTimeout):
+        error_details.update({
+            "timeout_type": "Read timeout",
+            "read_details": str(error)
+        })
+    elif isinstance(error, httpx.ConnectError):
+        error_details.update({
+            "connection_error": str(error),
+            "connection_type": "HTTP connection failed"
+        })
+    elif isinstance(error, (socket.gaierror, socket.timeout)):
+        error_details.update({
+            "network_error": str(error),
+            "network_type": "DNS/Socket error"
+        })
+    
+    # DNS resolution test
+    try:
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        hostname = parsed_url.hostname
+        if hostname:
+            import socket
+            ip = socket.gethostbyname(hostname)
+            error_details["dns_resolution"] = {"hostname": hostname, "resolved_ip": ip}
+    except Exception as dns_error:
+        error_details["dns_resolution"] = {"error": str(dns_error)}
+    
+    # Log detallado
+    logger.error(f"Network error in {operation}:")
+    logger.error(f"Error details: {json.dumps(error_details, indent=2, default=str)}")
+    
+    return error_details
 
 
 class DataExtractor:
@@ -107,11 +181,21 @@ class DataExtractor:
             return processed_data
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Error HTTP obteniendo datos de crimenes: {e}")
+            client_info = {
+                "client_timeout": "default",
+                "params": params,
+                "data_fetched": len(data) if 'data' in locals() else 0
+            }
+            log_network_error(e, url, "fetch_crime_data", client_info)
             logger.warning("Retornando lista vacía debido a error en API de crimenes")
             return []
         except Exception as e:
-            logger.error(f"Error obteniendo datos de crimenes: {e}")
+            client_info = {
+                "client_timeout": "default",
+                "params": params,
+                "error_location": "fetch_crime_data general exception"
+            }
+            log_network_error(e, url, "fetch_crime_data", client_info)
             logger.warning("Retornando lista vacía debido a error en API de crimenes")
             return []
 
@@ -179,7 +263,8 @@ class DataExtractor:
             return True
             
         except Exception as e:
-            logger.error(f"Error descargando datos de criminalidad: {e}")
+            log_network_error(e, url, "fetch_crime_data_geojson", 
+                            {"operation": "download_and_extract_zip", "target_file": target_file})
             return False
 
     async def fetch_bike_lanes(self, use_cache: bool = True) -> gpd.GeoDataFrame:
@@ -223,7 +308,7 @@ class DataExtractor:
             return gdf
 
         except Exception as e:
-            logger.error(f"Error obteniendo ciclorutas: {e}")
+            log_network_error(e, settings.bike_lanes_geojson_url, "fetch_bike_lanes", {"cache_file": str(cache_file)})
             # Intentar usar datos cacheados aunque expirados
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
@@ -271,7 +356,7 @@ class DataExtractor:
             return df
 
         except Exception as e:
-            logger.error(f"Error obteniendo estacionamientos: {e}")
+            log_network_error(e, settings.parking_csv_url, "fetch_bike_parking", {"cache_file": str(cache_file)})
             # Intentar usar datos cacheados aunque expirados
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
@@ -329,7 +414,8 @@ class DataExtractor:
             return gdf
 
         except Exception as e:
-            logger.error(f"Error obteniendo {zone_type}: {e}")
+            log_network_error(e, url, f"fetch_zones_{zone_type}", 
+                            {"zone_type": zone_type, "cache_file": str(cache_file)})
             # Intentar usar datos cacheados aunque expirados
             if cache_file.exists():
                 logger.warning("Usando cache expirado debido a error de obtencion")
