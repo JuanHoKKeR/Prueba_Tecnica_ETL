@@ -5,6 +5,7 @@ API de analisis de zonas de Roda - Aplicacion principal de FastAPI
 import logging
 import uuid
 import warnings
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
@@ -12,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 import uvicorn
 
 from .config.settings import settings
@@ -23,6 +25,8 @@ from .models.schemas import (
 from .etl.extract import DataExtractor
 from .etl.transform import DataTransformer
 from .etl.load import DataLoader
+from .services.anomaly_detection import ZoneAnomalyDetector, analyze_with_ml
+
 
 # Suprimir warnings molestos de fiona
 warnings.filterwarnings("ignore", category=UserWarning, module="fiona.ogrext")
@@ -515,6 +519,243 @@ async def general_exception_handler(request, exc):
         status_code=500,
         content=response_dict
     )
+    
+    
+@app.get("/ml/anomalies")
+async def detect_anomalies():
+    """
+    Detecta zonas con comportamiento anómalo usando Isolation Forest
+    
+    Útil para identificar zonas que requieren atención especial
+    """
+    try:
+        async with DataLoader() as loader:
+            # Obtener todos los scores actuales
+            scores = await loader.get_latest_scores(limit=100)
+            
+            if not scores:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No data available for anomaly detection"
+                )
+            
+            # Convertir a DataFrame
+            df = pd.DataFrame(scores)
+            
+            # Detectar anomalías
+            detector = ZoneAnomalyDetector()
+            anomalies = detector.detect_theft_anomalies(df)
+            
+            return {
+                "analysis_type": "anomaly_detection",
+                "timestamp": datetime.now(),
+                "results": anomalies,
+                "summary": {
+                    "total_zones_analyzed": anomalies.get("total_zones", 0),
+                    "anomalous_zones_found": anomalies.get("anomalous_zones", 0),
+                    "action_required": anomalies.get("anomalous_zones", 0) > 0
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in anomaly detection: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error detecting anomalies: {str(e)}"
+        )
+
+
+@app.get("/ml/clusters")
+async def cluster_zones(n_clusters: int = Query(4, ge=2, le=10)):
+    """
+    Agrupa zonas similares usando K-Means clustering
+    
+    Permite estrategias diferenciadas por tipo de zona
+    """
+    try:
+        async with DataLoader() as loader:
+            scores = await loader.get_latest_scores(limit=100)
+            
+            if not scores or len(scores) < n_clusters:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Insufficient data for {n_clusters} clusters"
+                )
+            
+            df = pd.DataFrame(scores)
+            
+            detector = ZoneAnomalyDetector()
+            clusters = detector.cluster_zones(df, n_clusters=n_clusters)
+            
+            return {
+                "analysis_type": "clustering",
+                "timestamp": datetime.now(),
+                "results": clusters,
+                "summary": {
+                    "optimal_clusters": clusters.get("optimal_clusters", n_clusters),
+                    "zones_analyzed": len(df),
+                    "insights": generate_cluster_insights(clusters)
+                }
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in clustering: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error clustering zones: {str(e)}"
+        )
+
+
+@app.get("/ml/predict/{zone_code}")
+async def predict_zone_trend(
+    zone_code: str,
+    days_ahead: int = Query(30, ge=7, le=90)
+):
+    """
+    Predice la tendencia futura de una zona usando regresión lineal
+    
+    Útil para anticipar mejoras o deterioros en seguridad
+    """
+    try:
+        async with DataLoader() as loader:
+            # Obtener histórico de la zona
+            async with loader.async_session() as session:
+                query = text("""
+                    SELECT * FROM zone_safety_scores 
+                    WHERE zone_code = :zone_code
+                    ORDER BY calculation_date DESC
+                    LIMIT 30
+                """)
+                
+                result = await session.execute(query, {"zone_code": zone_code})
+                rows = result.fetchall()
+                
+                if len(rows) < 3:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Insufficient historical data for prediction"
+                    )
+                
+                # Convertir a DataFrame
+                import pandas as pd
+                df = pd.DataFrame([dict(row._mapping) for row in rows])
+                
+                detector = ZoneAnomalyDetector()
+                prediction = detector.predict_trend(zone_code, df)
+                
+                return {
+                    "analysis_type": "trend_prediction",
+                    "zone": zone_code,
+                    "timestamp": datetime.now(),
+                    "prediction": prediction,
+                    "visualization_data": {
+                        "historical": df[['calculation_date', 'thefts_last_30_days']].to_dict('records'),
+                        "predicted_point": {
+                            "date": (datetime.now() + timedelta(days=days_ahead)).date(),
+                            "predicted_thefts": prediction.get("predicted_thefts_30d", 0)
+                        }
+                    }
+                }
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error predicting trend for {zone_code}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error predicting trend: {str(e)}"
+        )
+
+
+@app.get("/ml/insights")
+async def get_ml_insights():
+    """
+    Obtiene insights combinados de todos los análisis ML
+    
+    Proporciona recomendaciones estratégicas basadas en IA
+    """
+    try:
+        insights = {
+            "timestamp": datetime.now(),
+            "insights": [],
+            "recommendations": []
+        }
+        
+        # 1. Anomalías
+        anomalies_response = await detect_anomalies()
+        if anomalies_response["results"].get("anomalous_zones", 0) > 0:
+            insights["insights"].append({
+                "type": "ANOMALY",
+                "priority": "HIGH",
+                "message": f"{anomalies_response['results']['anomalous_zones']} zonas requieren atención inmediata",
+                "zones": [a["zone"] for a in anomalies_response["results"]["anomalies"]]
+            })
+        
+        # 2. Clusters
+        clusters_response = await cluster_zones(n_clusters=4)
+        high_value_clusters = [
+            c for c in clusters_response["results"]["clusters"].values()
+            if c["avg_safety_score"] > 70
+        ]
+        
+        if high_value_clusters:
+            insights["insights"].append({
+                "type": "OPPORTUNITY",
+                "priority": "MEDIUM",
+                "message": f"{len(high_value_clusters)} grupos de zonas óptimas para expansión",
+                "zones": [z for c in high_value_clusters for z in c["zones"]]
+            })
+        
+        # 3. Recomendaciones estratégicas
+        insights["recommendations"] = [
+            {
+                "strategy": "EXPANSION",
+                "zones": [z for c in high_value_clusters for z in c["zones"]][:5],
+                "rationale": "Zonas con mejor balance riesgo-infraestructura"
+            },
+            {
+                "strategy": "RISK_MITIGATION",
+                "zones": [a["zone"] for a in anomalies_response["results"].get("anomalies", [])][:3],
+                "rationale": "Requieren medidas de seguridad adicionales"
+            }
+        ]
+        
+        return insights
+        
+    except Exception as e:
+        logger.error(f"Error generating ML insights: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating insights: {str(e)}"
+        )
+
+
+def generate_cluster_insights(clusters: Dict) -> List[str]:
+    """Helper para generar insights de clusters"""
+    insights = []
+    
+    if not clusters.get("clusters"):
+        return insights
+    
+    # Analizar distribución de clusters
+    cluster_sizes = [c["size"] for c in clusters["clusters"].values()]
+    avg_scores = [c["avg_safety_score"] for c in clusters["clusters"].values()]
+    
+    # Insight sobre balance
+    if max(cluster_sizes) > sum(cluster_sizes) * 0.5:
+        insights.append("Desbalance detectado: un cluster domina la distribución")
+    
+    # Insight sobre oportunidades
+    high_score_zones = sum(1 for score in avg_scores if score > 70)
+    if high_score_zones > 0:
+        insights.append(f"{high_score_zones} clusters identificados como oportunidades de expansión")
+    
+    # Insight sobre riesgos
+    low_score_zones = sum(1 for score in avg_scores if score < 40)
+    if low_score_zones > 0:
+        insights.append(f"{low_score_zones} clusters requieren estrategia de mitigación de riesgo")
+    
+    return insights
 
 
 # Ejecutar la aplicacion

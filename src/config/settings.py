@@ -118,6 +118,7 @@ class Settings(BaseSettings):
         env_file = ".env"  # Archivo de variables de entorno
         env_file_encoding = "utf-8"  # Codificacion del archivo
         case_sensitive = False  # No sensible a mayusculas
+        extra = "allow"  # Permitir campos adicionales
 
 
 # Crear instancia global de settings
