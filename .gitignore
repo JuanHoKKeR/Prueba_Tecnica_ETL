@@ -61,3 +61,5 @@ Thumbs.db
 *.tmp
 .deploy
 deploy-*.log
+
+deploy/cloud-run-env.txt
