@@ -29,10 +29,10 @@ main:
             - logHealthError:
                 call: sys.log
                 args:
-                  text: ${"Health check failed: " + json.encode_to_string(e)}
+                  text: '${"Health check failed: " + json.encode_to_string(e)}'
                   severity: "ERROR"
             - raiseHealthError:
-                raise: ${"Service unhealthy: " + json.encode_to_string(e)}
+                raise: '${"Service unhealthy: " + json.encode_to_string(e)}'
 
     # Step 3: Trigger procesamiento batch
     - triggerETL:
@@ -54,10 +54,10 @@ main:
             - logETLError:
                 call: sys.log
                 args:
-                  text: ${"ETL trigger failed: " + json.encode_to_string(e)}
+                  text: '${"ETL trigger failed: " + json.encode_to_string(e)}'
                   severity: "ERROR"
             - raiseETLError:
-                raise: ${"Failed to start ETL: " + json.encode_to_string(e)}
+                raise: '${"Failed to start ETL: " + json.encode_to_string(e)}'
 
     - extractJobId:
         assign:
@@ -81,15 +81,23 @@ main:
                   
                   - evaluateStatus:
                       switch:
-                        - condition: ${job_status_response.body.status == "COMPLETED"}
-                          next: jobCompleted
-                        - condition: ${job_status_response.body.status == "FAILED"}
-                          next: jobFailed
+                        - condition: '${job_status_response.body.status == "COMPLETED"}'
+                          return: "COMPLETED"
+                        - condition: '${job_status_response.body.status == "FAILED"}'
+                          return: "FAILED"
                   
                   - waitBeforeRetry:
                       call: sys.sleep
                       args:
                         seconds: 10
+          
+          - checkFinalStatus:
+              switch:
+                - condition: '${job_status_response.body.status == "COMPLETED"}'
+                  next: jobCompleted
+                - condition: '${job_status_response.body.status == "FAILED"}'
+                  next: jobFailed
+              next: jobTimeout
 
     - jobTimeout:
         call: sys.log
@@ -101,20 +109,21 @@ main:
     - jobCompleted:
         call: sys.log
         args:
-          text: ${"ETL job completed successfully: " + job_id}
+          text: '${"ETL job completed successfully: " + job_id}'
           severity: "INFO"
         next: analyzeZones
 
     - jobFailed:
         call: sys.log
         args:
-          text: ${"ETL job failed: " + job_id}
+          text: '${"ETL job failed: " + job_id}'
           severity: "ERROR"
         next: notifyFailure
 
     # Step 5: Analizar cada zona y aplicar ML
     - analyzeZones:
         parallel:
+          shared: [errors]
           for:
             value: zone
             in: ${zones_to_process}
@@ -132,7 +141,7 @@ main:
                       - logZoneError:
                           call: sys.log
                           args:
-                            text: ${"Failed to analyze zone " + zone + ": " + json.encode_to_string(e)}
+                            text: '${"Failed to analyze zone " + zone + ": " + json.encode_to_string(e)}'
                             severity: "WARNING"
                       - addToErrors:
                           assign:
@@ -145,7 +154,7 @@ main:
           args:
             projectId: ${project_id}
             body:
-              query: ${"SELECT COUNT(*) as count, MAX(calculation_date) as latest_date FROM `" + project_id + "." + bigquery_dataset + ".zone_safety_scores` WHERE calculation_date = CURRENT_DATE()"}
+              query: 'SELECT COUNT(*) as count, MAX(calculation_date) as latest_date FROM `focus-chain-470709-q6.roda_analytics.zone_safety_scores` WHERE calculation_date = CURRENT_DATE()'
               useLegacySql: false
           result: bq_validation
         except:
@@ -154,7 +163,7 @@ main:
             - logBQError:
                 call: sys.log
                 args:
-                  text: ${"BigQuery validation failed: " + json.encode_to_string(e)}
+                  text: '${"BigQuery validation failed: " + json.encode_to_string(e)}'
                   severity: "WARNING"
 
     # Step 7: Generar reporte de ejecución
@@ -169,7 +178,7 @@ main:
               duration_seconds: ${duration_seconds}
               zones_processed: ${zones_to_process}
               errors: ${errors}
-              status: ${if(len(errors) > 0, "COMPLETED_WITH_ERRORS", "SUCCESS")}
+              status: '${if(len(errors) > 0, "COMPLETED_WITH_ERRORS", "SUCCESS")}'
 
     # Step 8: Guardar métricas en BigQuery
     - saveMetrics:
@@ -178,17 +187,44 @@ main:
           args:
             projectId: ${project_id}
             body:
-              query: ${
-                "INSERT INTO `" + project_id + "." + bigquery_dataset + ".workflow_executions` " +
-                "(execution_id, start_time, end_time, duration_seconds, zones_processed, error_count, status) VALUES (" +
-                "'" + execution_id + "', " +
-                "TIMESTAMP('" + start_time + "'), " +
-                "TIMESTAMP('" + end_time + "'), " +
-                duration_seconds + ", " +
-                len(zones_to_process) + ", " +
-                len(errors) + ", " +
-                "'" + report.status + "')"
-              }
+              query: 'INSERT INTO `focus-chain-470709-q6.roda_analytics.workflow_executions` (execution_id, start_time, end_time, duration_seconds, zones_processed, error_count, status) VALUES (@execution_id, @start_time, @end_time, @duration_seconds, @zones_processed, @error_count, @status)'
+              parameterMode: "NAMED"
+              queryParameters:
+                - name: "execution_id"
+                  parameterType:
+                    type: "STRING"
+                  parameterValue:
+                    value: ${execution_id}
+                - name: "start_time"
+                  parameterType:
+                    type: "TIMESTAMP"
+                  parameterValue:
+                    value: ${start_time}
+                - name: "end_time"
+                  parameterType:
+                    type: "TIMESTAMP"
+                  parameterValue:
+                    value: ${end_time}
+                - name: "duration_seconds"
+                  parameterType:
+                    type: "INT64"
+                  parameterValue:
+                    value: ${duration_seconds}
+                - name: "zones_processed"
+                  parameterType:
+                    type: "INT64"
+                  parameterValue:
+                    value: ${len(zones_to_process)}
+                - name: "error_count"
+                  parameterType:
+                    type: "INT64"
+                  parameterValue:
+                    value: ${len(errors)}
+                - name: "status"
+                  parameterType:
+                    type: "STRING"
+                  parameterValue:
+                    value: ${report.status}
               useLegacySql: false
         except:
           as: e
@@ -205,14 +241,14 @@ main:
         args:
           text: ${json.encode_to_string(report)}
           severity: "INFO"
-        next: end
+        next: finish
 
     - notifyFailure:
         call: sys.log
         args:
           text: "ETL Pipeline failed"
           severity: "ERROR"
-        next: end
+        next: finish
 
-    - end:
+    - finish:
         return: ${report}

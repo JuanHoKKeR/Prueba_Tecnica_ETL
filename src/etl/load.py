@@ -400,9 +400,9 @@ class DataLoader:
                     'zone_code': score.zone_code,
                     'zone_name': score.zone_name,
                     'calculation_date': score.calculation_date.isoformat(),
-                    'safety_score': score.safety_score,
+                    'safety_score': float(score.safety_score),
                     'risk_level': score.risk_level.value,
-                    'thefts_30d': score.metrics.thefts_last_30_days,
+                    'thefts_30d': int(score.metrics.thefts_last_30_days),
                     'trend': score.trend.value,
                     'created_at': score.created_at.isoformat() if score.created_at else None
                 }

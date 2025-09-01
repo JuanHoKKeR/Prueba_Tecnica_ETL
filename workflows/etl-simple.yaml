@@ -1,0 +1,84 @@
+# Google Cloud Workflows - Pipeline ETL Simplificado
+main:
+  params: [args]
+  steps:
+    # Step 1: Inicializar variables
+    - init:
+        assign:
+          - cloud_run_url: "https://roda-analytics.juancruzdev.net"
+          - start_time: ${sys.now()}
+
+    # Step 2: Verificar salud del servicio
+    - checkHealth:
+        try:
+          call: http.get
+          args:
+            url: ${cloud_run_url + "/health"}
+            timeout: 10
+          result: health_response
+        except:
+          as: e
+          steps:
+            - logHealthError:
+                call: sys.log
+                args:
+                  text: "Health check failed"
+                  severity: "ERROR"
+            - raiseHealthError:
+                raise: "Service unhealthy"
+
+    # Step 3: Trigger procesamiento ETL
+    - triggerETL:
+        try:
+          call: http.post
+          args:
+            url: ${cloud_run_url + "/process"}
+            headers:
+              Content-Type: "application/json"
+            body:
+              mode: "BATCH"
+              force_refresh: true
+            timeout: 30
+          result: etl_response
+        except:
+          as: e
+          steps:
+            - logETLError:
+                call: sys.log
+                args:
+                  text: "ETL trigger failed"
+                  severity: "ERROR"
+            - raiseETLError:
+                raise: "Failed to start ETL"
+
+    - extractJobId:
+        assign:
+          - job_id: ${etl_response.body.job_id}
+
+    # Step 4: Esperar un poco y verificar el estado
+    - waitAndCheck:
+        call: sys.sleep
+        args:
+          seconds: 120
+
+    - checkFinalStatus:
+        call: http.get
+        args:
+          url: ${cloud_run_url + "/process/" + job_id}
+          timeout: 10
+        result: final_status
+
+    # Step 5: Log del resultado
+    - logCompletion:
+        call: sys.log
+        args:
+          text: "ETL process completed"
+          severity: "INFO"
+
+    # Step 6: Retornar resultado
+    - finish:
+        return:
+          job_id: ${job_id}
+          status: ${final_status.body.status}
+          start_time: ${start_time}
+          end_time: ${sys.now()}
