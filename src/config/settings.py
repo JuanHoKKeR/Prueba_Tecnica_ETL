@@ -117,9 +117,12 @@ class Settings(BaseSettings):
                 # Para sync con socket Unix
                 return f"postgresql://{self.postgres_user}:{self.postgres_password}@/{self.postgres_db}?host={self.postgres_host}"
         
-        # Para conexiones normales (IP)
+        # Para conexiones normales (IP) - manejar caracteres especiales en contraseña
         if async_mode:
-            return self.database_url.replace("postgresql://", "postgresql+asyncpg://")
+            # URL encoding para caracteres especiales en la contraseña
+            import urllib.parse
+            password_encoded = urllib.parse.quote(self.postgres_password, safe='')
+            return f"postgresql+asyncpg://{self.postgres_user}:{password_encoded}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         return self.database_url
 
     class Config:
