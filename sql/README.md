@@ -1,0 +1,1 @@
+psql "postgresql://roda_user:${password}@${IP_DB}:5432/roda_analytics" -f sql/init.sql

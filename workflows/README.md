@@ -51,7 +51,27 @@ gcloud workflows execute roda-etl-simple \
 1. **Corregir sintaxis** en `etl-orchestration.yaml`
 2. **Probar funciones avanzadas** de procesamiento paralelo
 3. **Migrar** de simple a orchestration cuando esté listo
-4. **Agregar workflows** para análisis específicos
+4. **Integrar ML endpoints** en workflows para análisis automático
+5. **Agregar workflows** para análisis específicos
+
+### 🤖 Integración ML (NUEVO)
+Los workflows ahora pueden integrar análisis ML automático:
+
+```yaml
+# Ejemplo: Añadir análisis ML al workflow ETL
+- mlAnalysis:
+    call: http.get
+    args:
+      url: ${cloud_run_url + "/ml/insights"}
+    result: ml_insights
+
+- evaluateAnomalies:
+    switch:
+      - condition: ${ml_insights.body.insights[0].type == "ANOMALY"}
+        next: alertManagement
+      - condition: true
+        next: continueProcessing
+```
 
 ## 🔗 Enlaces Útiles
 
