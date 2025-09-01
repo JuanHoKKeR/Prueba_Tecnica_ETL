@@ -63,3 +63,5 @@ Thumbs.db
 deploy-*.log
 
 deploy/cloud-run-env.txt
+
+Prueba-Tecnica.md

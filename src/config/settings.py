@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     )  # Base URL para la API de datos abiertos de Colombia
 
     # Configuracion del cache
-    cache_ttl_seconds: int = Field(default=3600, env="CACHE_TTL_SECONDS")  # Tiempo de vida del cache en segundos
+    cache_ttl_seconds: int = Field(default=86400, env="CACHE_TTL_SECONDS")  # 24 horas para Cloud Run
     data_cache_dir: Path = Field(default="/tmp/roda_cache", env="DATA_CACHE_DIR")  # Directorio para cache de datos
 
     # Logging
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
 
     # Procesamiento de datos
     batch_size: int = 1000  # Tamaño de lotes para procesar datos
-    max_retries: int = 3  # Maximo numero de reintentos
-    request_timeout: int = 30  # Timeout para requests en segundos
+    max_retries: int = 2  # Reducido de 3 a 2 para ser más rápido
+    request_timeout: int = 10  # Reducido de 30 a 10 segundos para Cloud Run
 
     # Umbrales para puntajes de riesgo
     risk_thresholds: dict = {
