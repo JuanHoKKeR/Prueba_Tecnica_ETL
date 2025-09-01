@@ -89,8 +89,8 @@ jobs:
             --memory=4Gi \
             --cpu=4 \
             --min-instances=1 \
-            --max-instances=10 \
-            --timeout=1200 \
+            --max-instances=5 \
+            --timeout=600 \
             --concurrency=50 \
             --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
             --set-env-vars="POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}" \
