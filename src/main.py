@@ -4,6 +4,7 @@ API de analisis de zonas de Roda - Aplicacion principal de FastAPI
 
 import logging
 import uuid
+import warnings
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
@@ -23,12 +24,19 @@ from .etl.extract import DataExtractor
 from .etl.transform import DataTransformer
 from .etl.load import DataLoader
 
+# Suprimir warnings molestos de fiona
+warnings.filterwarnings("ignore", category=UserWarning, module="fiona.ogrext")
+warnings.filterwarnings("ignore", message=".*Expecting property name enclosed in double quotes.*")
+
 # Configurar logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Suprimir logs específicos que son molestos
+logging.getLogger("fiona.ogrext").setLevel(logging.ERROR)
 
 
 # Tracker global de trabajos (en produccion, usar Redis o base de datos)

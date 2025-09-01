@@ -409,7 +409,17 @@ class DataLoader:
             # Cargar a BigQuery
             job_config = bigquery.LoadJobConfig(
                 write_disposition="WRITE_APPEND",
-                schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION]
+                schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION],
+                schema=[
+                    bigquery.SchemaField("zone_code", "STRING", mode="REQUIRED"),
+                    bigquery.SchemaField("zone_name", "STRING", mode="REQUIRED"),
+                    bigquery.SchemaField("calculation_date", "TIMESTAMP", mode="REQUIRED"),
+                    bigquery.SchemaField("safety_score", "FLOAT", mode="REQUIRED"),
+                    bigquery.SchemaField("risk_level", "STRING", mode="REQUIRED"),
+                    bigquery.SchemaField("thefts_30d", "INTEGER", mode="NULLABLE"),
+                    bigquery.SchemaField("trend", "STRING", mode="NULLABLE"),
+                    bigquery.SchemaField("created_at", "TIMESTAMP", mode="NULLABLE"),
+                ]
             )
 
             job = client.load_table_from_dataframe(df, table_ref, job_config=job_config)
