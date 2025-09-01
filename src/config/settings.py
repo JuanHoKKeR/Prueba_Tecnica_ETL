@@ -20,15 +20,12 @@ class Settings(BaseSettings):
     api_version: str = "1.0.0"  # Version de la API
 
     # Configuracion de la base de datos
-    database_url: str = Field(
-        default="postgresql://roda_user:123456@localhost:5432/roda_analytics",
-        env="DATABASE_URL"
-    )  # URL completa para conectar a Postgres
-    postgres_user: str = Field(default="roda_user", env="POSTGRES_USER")  # Usuario de Postgres
-    postgres_password: str = Field(default="123456", env="POSTGRES_PASSWORD")  # Contraseña de Postgres
-    postgres_db: str = Field(default="roda_analytics", env="POSTGRES_DB")  # Nombre de la base de datos
-    postgres_host: str = Field(default="localhost", env="POSTGRES_HOST")  # Host de Postgres
-    postgres_port: int = Field(default=5432, env="POSTGRES_PORT")  # Puerto de Postgres
+    database_url: str = Field(default="postgresql://roda_user:RodaSecure2025_NewPass!@#@localhost:5432/roda_analytics", env="DATABASE_URL")
+    postgres_host: str = Field(default="localhost", env="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, env="POSTGRES_PORT")
+    postgres_user: str = Field(default="roda_user", env="POSTGRES_USER")
+    postgres_password: str = Field(default="RodaSecure2025_NewPass!@#", env="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="roda_analytics", env="POSTGRES_DB")
 
     # Configuracion de BigQuery y GCP
     enable_bigquery: bool = Field(default=False, env="ENABLE_BIGQUERY")  # Habilitar BigQuery
@@ -110,6 +107,17 @@ class Settings(BaseSettings):
 
     def get_database_url(self, async_mode: bool = True) -> str:
         """Obtener URL de base de datos con el driver apropiado"""
+        
+        # Si es un socket Unix (Cloud SQL), usar formato especial
+        if "/cloudsql/" in self.database_url:
+            if async_mode:
+                # Para async con socket Unix, usar asyncpg directamente
+                return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@/{self.postgres_db}?host={self.postgres_host}"
+            else:
+                # Para sync con socket Unix
+                return f"postgresql://{self.postgres_user}:{self.postgres_password}@/{self.postgres_db}?host={self.postgres_host}"
+        
+        # Para conexiones normales (IP)
         if async_mode:
             return self.database_url.replace("postgresql://", "postgresql+asyncpg://")
         return self.database_url
