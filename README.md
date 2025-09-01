@@ -150,6 +150,7 @@ Elegí **batch sobre real-time** porque:
 ```bash
 # Verificar estado del sistema
 curl https://roda-analytics.juancruzdev.net/health
+```
 
 **2. Procesamiento de Datos ETL**
 ```bash
