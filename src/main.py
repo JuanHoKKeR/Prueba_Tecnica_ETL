@@ -140,8 +140,9 @@ async def run_etl_pipeline(
 
         # Cargar datos
         logger.info(f"Cargando {len(scores)} puntajes de zona a la base de datos")
+        
+        # Crear registro de trabajo antes de cargar
         async with DataLoader() as loader:
-            # Crear registro de trabajo
             db_job_id = await loader.create_job(
                 job_type="BATCH_PROCESS",
                 metadata={"request": request.dict()}
@@ -152,14 +153,15 @@ async def run_etl_pipeline(
                 logger.info("Cargando datos de zonas a la base de datos")
                 await loader.load_zones(data['localidades'])
 
-            # Cargar puntajes de seguridad
-            records = await loader.load_zone_safety_scores(scores, db_job_id)
+        # Cargar puntajes usando load_data que incluye BigQuery
+        from .etl.load import load_data
+        records = await load_data(scores, data['localidades'], db_job_id)
 
-            # Actualizar tracker de trabajos
-            job_tracker[job_id]["status"] = JobStatus.COMPLETED
-            job_tracker[job_id]["completed_at"] = datetime.now()
-            job_tracker[job_id]["records_processed"] = records
-            job_tracker[job_id]["message"] = f"Procesadas exitosamente {records} zonas"
+        # Actualizar tracker de trabajos
+        job_tracker[job_id]["status"] = JobStatus.COMPLETED
+        job_tracker[job_id]["completed_at"] = datetime.now()
+        job_tracker[job_id]["records_processed"] = records
+        job_tracker[job_id]["message"] = f"Procesadas exitosamente {records} zonas"
 
         logger.info(f"Pipeline ETL completado para trabajo {job_id}")
 
