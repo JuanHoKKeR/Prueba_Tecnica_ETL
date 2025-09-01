@@ -52,28 +52,6 @@ jobs:
           echo "tag=v$(date +%Y%m%d)-$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "image=${{ env.REGISTRY_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/zone-analytics:v$(date +%Y%m%d)-$SHORT_SHA" >> $GITHUB_OUTPUT
 
-      - name: 🛡️ Create database backup before deployment
-        run: |
-          echo "🛡️ Creating database backup before deployment..."
-          
-          # Verificar que la base de datos existe
-          DB_EXISTS=$(gcloud sql databases list \
-            --instance=roda-analytics-db \
-            --project=${{ env.PROJECT_ID }} \
-            --filter="name=roda_analytics" \
-            --format="value(name)")
-          
-          if [ -n "$DB_EXISTS" ]; then
-            echo "✅ Database exists, creating backup..."
-            gcloud sql backups create \
-              --instance=roda-analytics-db \
-              --description="Pre-deployment backup - ${{ steps.image_tag.outputs.tag }}" \
-              --project=${{ env.PROJECT_ID }}
-            echo "✅ Backup created successfully"
-          else
-            echo "⚠️ Database 'roda_analytics' does not exist - will be created during deployment"
-          fi
-
       - name: 🏗️ Build Docker image
         run: |
           docker build \
