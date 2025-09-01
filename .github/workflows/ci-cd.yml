@@ -89,7 +89,7 @@ jobs:
             --memory=4Gi \
             --cpu=4 \
             --min-instances=1 \
-            --max-instances=5 \
+            --max-instances=2 \
             --timeout=600 \
             --concurrency=50 \
             --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
