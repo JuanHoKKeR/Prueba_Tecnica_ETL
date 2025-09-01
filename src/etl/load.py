@@ -383,6 +383,10 @@ class DataLoader:
             logger.info("BigQuery no configurado, saltando")
             return 0
 
+        if not scores:
+            logger.info("No hay puntajes para cargar a BigQuery")
+            return 0
+
         try:
             from google.cloud import bigquery
 

@@ -13,7 +13,7 @@ env:
   REGISTRY_HOSTNAME: us-central1-docker.pkg.dev
   REPOSITORY: roda-repo
   # 🌐 URL configurable - cambiar solo aquí para todo el pipeline
-  SERVICE_DOMAIN: roda-analytics-jebcgzfxdq-uc.a.run.app
+  SERVICE_DOMAIN: roda-analytics.juancruzdev.net
 
 jobs:
   # ====================================
@@ -86,11 +86,11 @@ jobs:
             --platform=managed \
             --region=${{ env.REGION }} \
             --port=8080 \
-            --memory=2Gi \
-            --cpu=2 \
+            --memory=4Gi \
+            --cpu=4 \
             --min-instances=1 \
-            --max-instances=5 \
-            --timeout=600 \
+            --max-instances=10 \
+            --timeout=1200 \
             --concurrency=50 \
             --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
             --set-env-vars="POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}" \
