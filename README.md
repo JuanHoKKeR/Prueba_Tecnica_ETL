@@ -247,7 +247,6 @@ curl https://roda-analytics.juancruzdev.net/ml/predict/CHAPINERO
   }
 }
 ```
-```
 
 ---
 
@@ -636,9 +635,9 @@ Si mi propuesta les interesa, estos serían los siguientes desarrollos:
 ## 📞 Contacto
 
 **Juan Cruz** - Candidato Jr. ML Engineer  
-📧 Email: [tu-email@example.com]  
-🔗 LinkedIn: [linkedin.com/in/tu-perfil]  
-🐙 GitHub: [github.com/JuanHoKKeR]  
+📧 Email: juan.cruz.useche@unillanos.edu.co  
+🔗 LinkedIn: https://www.linkedin.com/in/juancruzuseche/
+🐙 GitHub: https://github.com/JuanHoKKeR
 
 **Demo en vivo**: [roda-analytics.juancruzdev.net](https://roda-analytics.juancruzdev.net)  
 **Repositorio**: [github.com/JuanHoKKeR/Prueba_Tecnica_ETL](https://github.com/JuanHoKKeR/Prueba_Tecnica_ETL)
@@ -648,8 +647,6 @@ Si mi propuesta les interesa, estos serían los siguientes desarrollos:
 *¡Gracias por la oportunidad de ser parte del futuro de la movilidad urbana! 🚲⚡*
 
 ![Footer](docs/images/footer.png)
-<!-- Imagen sugerida: Logo de RODA + texto motivacional sobre movilidad sostenible -->
-
 ---
 
 ## 📋 Especificaciones Técnicas Completas
